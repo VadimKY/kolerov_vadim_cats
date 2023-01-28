@@ -1,0 +1,184 @@
+const catsInfoInstance = new CatsInfo('#cats-info-template', handleDeleteCat);
+const catsInfoElement = catsInfoInstance.getElement()
+
+//const popupInfo = new Popup (".row mb-3");
+//popupInfo.setEventListener();
+
+function createCat(dataCat) { // функция добавления кота
+    const cat = new Card(dataCat, '#card-template', handleCatImage) // создаем экземпляр кота из темплейта
+    const firstCat = cat.getElement() // берем этот эллемент
+    sectionCard.append(firstCat); // добавляем в секцию в DOM дерево
+}
+
+
+
+// оптимизируем код, переносим функцию в новь созданнй файл utils и подключаем импорт
+// function serializeForm(elements) { // формирует данне из форм в объект для отправки на сервер
+//     const formData = {};
+   
+//     elements.forEach(input => {
+//         if (input.type === 'submit') return
+
+//         if (input.type !== 'checkbox') {
+//                 formData[input.name] = input.value;   
+//         }
+
+//         if (input.type === 'checkbox') {
+//             formData[input.name] = input.checked;
+//         }
+//     });
+//     return formData
+// }
+
+function setDataRefrash(minutes, key) { // функция ставит интервал обновления локал-сторожа
+    const setTime = new Date(new Date().getTime() + minutes * 60000)
+    localStorage.setItem('catsRefrash', setTime);
+}
+
+
+
+function checkLocalStorage() { // проверяет нужно взять котов из базы или локал-сторожа
+    const localData = JSON.parse(localStorage.getItem('cats')); // берем данные из локал сторожа
+    const getTimeExpires = localStorage.getItem('catsRefrash') // берем дату из локал-сторожа на которую ориентируемся для повторного запроса
+
+    if (localData && localData.length && (new Date() < new Date(getTimeExpires))) { //проверяем: если массив не пустой и текущая дата меньше установленной
+        localData.forEach(catData => { // тогда берем котов из локал сторожа и добавляем в DOM дерево
+            createCat(catData);
+            })
+    } else {
+        api.getAllCats().then((data) => { // если текущая дата больше заданной идем в API берем котов, создаем
+            data.forEach(catData => {
+            createCat(catData);
+            })
+           // localStorage.setItem('cats', JSON.stringify(data)); // перезаписваем данные в локал-стороже
+          //  setDataRefrash(5); // перезаписываем переменную интервала обновления
+          //заменяем функцией 
+        updateLocalSorage(data, {type: "ALL_CATS"});
+          
+        })
+
+        
+    }
+}
+
+
+function handleFormAddCat(e) { // хендлер для сбора данных и отправки их на сервер
+    e.preventDefault(); // не перезагружать
+
+    const elementsFromCat = [...formAddCat.elements]; // сбор данных
+    const dataFormCat = serializeForm(elementsFromCat) //сформировали объект
+
+    api.addNewCat(dataFormCat).then(() => { // если сервер отетил успехом сформировали формуу и отправили в DOM дерево
+        createCat(dataFormCat);
+        updateLocalSorage(dataFormCat, {type: 'ADD_CAT'});
+    })
+
+    popupAddCat.close(); //закрли попап
+}
+
+function handleFormDeleteCat(e) {// хендлер для сбора данных и отправки их на сервер для удаления (не работает)
+    e.preventDefault(); // не перезагружать
+
+    const elementsFromCatDelete = [...formDeleteCat.elements]; // сбор данных
+    const dataFormCatDelete = serializeForm(elementsFromCatDelete); //сформировали объект
+
+    api.deleteNewCat(dataFormCatDelete).then(() => { // отправка на серер
+        console.log('dataFormCatDelete',dataFormCatDelete);
+        createCat(dataFormCatDelete);
+    })
+
+    popupDeleteCat.close();
+}
+
+function handleFormLogin(e) { //собираем данне и пишем кук (псевдо-авторизация)
+    e.preventDefault();
+
+    const loginData = [...formLogin.elements];
+    const serializeData = serializeForm(loginData);
+
+    Cookies.set('email', `email=${serializeData.email}`); //кук для авторизации на сервере
+    btnOpenPopupForm.classList.remove('visually-hidden');
+    btnLoginOpenPopup.classList.add('visually-hidden');
+    
+    popupLogin.close();
+}
+
+function handleCatImage(dataCat) {
+    popupImage.open(dataCat)
+}
+
+function handleCatTitle(cardInstance) {
+    catsInfoInstance.setData(cardInstance);
+    popupCatInfo.setContent(catsInfoElement);
+    popupCatInfo.open();
+}
+
+function handleDeleteCat(cardInstance) {
+
+    api.deleteCatById(cardInstance.getId()).then(() => {
+        cardInstance.deleteView();
+        updateLocalStorage(cardInstance.getId(), {type: 'DELETE_CAT'});
+        popupCatInfo.close();
+    })
+
+}
+
+
+function updateLocalSorage(data, action) { // {type: "ADD_CATS"} -функция обновления локал-сторожа
+    const oldSorage = JSON.parse(localStorage.getItem('cats')); //берем котов
+    
+    switch (action.type) {
+        case "ADD_CAT":      //добавить котов
+            oldSorage.push(data);
+            localStorage.setItem("cat", JSON.stringify(data));
+            return;
+        
+        case "ALL_CATS": // взять всех котов
+            localStorage.setItem("cat", JSON.stringify(data));
+            setDataRefrash(5, 'catsRefrash');
+            return;  
+
+        case "DELETE_CAT": // удалить кота
+            const newStorage = oldSorage.filter(cat => cat.id != data.id);
+            localStorage.setItem("cat", JSON.stringify(newStorage));
+            return;    
+        
+        case "EDIT_CAT": // изменить данные 
+            const updateStorage =  oldSorage.map(cat => cat.id === data.id ? data : cat); //проеряем по id если совпадает то заменяем data
+            localStorage.setItem("cat", JSON.stringify(updateStorage)); // на новый массив, если нет оставляем старый
+            return;        
+       
+        default:
+            break;    
+
+    }
+}
+
+checkLocalStorage(); 
+
+btnOpenPopupForm.addEventListener('click', () => popupAddCat.open());
+btnLoginOpenPopup.addEventListener('click', () => popupLogin.open())
+formAddCat.addEventListener('submit', handleFormAddCat);
+formLogin.addEventListener('submit', handleFormLogin);
+//btnOpenPopupInfo.addEventListener('click', () => popupInfo.open());
+
+//
+
+ const isAuth = Cookies.get('email');
+
+ if (!isAuth) { // проверка на авторизацию
+     popupLogin.open();
+     btnOpenPopupForm.classList.add('visually-hidden');
+ }  else {
+    btnLoginOpenPopup.classList.add('visually-hidden');
+ }
+
+// document.cookie = 'email=sber@sb.ru;samesite=strict;max-age=360'
+// Cookies.set('cook', 'res');
+// console.log(Cookies.get('cook'));
+// Cookies.remove('cook');
+// localStorage.setItem('name', 'Вася');
+// console.log(localStorage.getItem('name'));
+// localStorage.setItem('tel', JSON.stringify({sass: '+79863576', mess: 'yydydydy'}))
+// console.log(JSON.parse(localStorage.getItem('tel')));
+// localStorage.removeItem('name'
